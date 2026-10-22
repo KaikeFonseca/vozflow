@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>VozFlow — Configurações</title>
+<style>
+  :root { color-scheme: light dark; --muted: #888; --line: rgba(127,127,127,.25); }
+  body { font: 14px -apple-system, "Segoe UI", system-ui, sans-serif; margin: 0; padding: 20px 24px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 26px 0 8px; }
+  label { display: block; margin: 10px 0 4px; font-weight: 500; }
+  input, select, textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--line); font: inherit; background: transparent; }
+  textarea { min-height: 70px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 400; } .check input { width: auto; }
+  button { padding: 8px 18px; border-radius: 6px; border: 0; background: #3b6cff; color: #fff; font: inherit; cursor: pointer; }
+  #saved { margin-left: 10px; color: #2a9d55; opacity: 0; transition: opacity .3s; }
+  input.combo { cursor: pointer; font-weight: 600; } input.combo.rec { border-color: #3b6cff; color: #3b6cff; }
+  [data-show] { display: none; } [data-show].on { display: block; }
+</style>
+</head>
+<body>
+<h1>VozFlow</h1>
+<div class="hint" id="howto"></div>
+
+<h2>Transcrição</h2>
+<label>Provedor</label>
+<select id="sttPreset">
+  <option value="groq">Groq (whisper-large-v3-turbo, rápido e barato)</option>
+  <option value="openai">OpenAI (gpt-4o-mini-transcribe)</option>
+  <option value="local">Servidor Whisper local (offline)</option>
+  <option value="custom">Personalizado</option>
+</select>
+<div class="row">
+  <div><label>URL base</label><input id="stt.baseUrl"></div>
+  <div><label>Modelo</label><input id="stt.model"></div>
+</div>
+<label>Chave da API</label><input id="stt.apiKey" type="password" placeholder="gsk_… ou sk-…">
+<label>Idioma</label>
+<select id="language">
+  <option value="pt-en">Português + English (detecta sozinho, aceita frases misturadas)</option>
+  <option value="pt">Só português</option><option value="en">Only English</option>
+  <option value="auto">Qualquer idioma (detecção automática)</option>
+</select>
+
+<h2>Limpeza com IA (opcional)</h2>
+<div class="hint">Remove "é", "tipo", "né", aplica autocorreções ("às 5, quer dizer, às 6") e pontua.</div>
+<div class="row">
+  <div><label>Provedor</label>
+    <select id="cleanup.provider">
+      <option value="none">Desligado (texto direto do Whisper)</option>
+      <option value="anthropic">Claude (Anthropic)</option>
+      <option value="openai">Compatível com OpenAI (Groq, OpenAI…)</option>
+    </select></div>
+  <div><label>Estilo</label>
+    <select id="cleanup.style"><option value="natural">Natural</option><option value="formal">Formal</option><option value="casual">Casual</option></select></div>
+</div>
+<div data-show="anthropic">
+  <div class="row">
+    <div><label>Modelo Claude</label><input id="cleanup.anthropicModel"></div>
+    <div><label>Chave Anthropic</label><input id="cleanup.anthropicKey" type="password" placeholder="sk-ant-…"></div>
+  </div>
+</div>
+<div data-show="openai">
+  <div class="row">
+    <div><label>URL base</label><input id="cleanup.openaiBaseUrl"></div>
+    <div><label>Modelo</label><input id="cleanup.openaiModel"></div>
+  </div>
+  <label>Chave</label><input id="cleanup.openaiKey" type="password">
+</div>
+
+<h2>Atalhos</h2>
+<div class="hint">Clique em um campo e aperte as teclas que quer usar. Apague o campo (Backspace) para desativar.</div>
+<label>Hands-free: toque duplo em</label><input id="doubleTap" class="combo" readonly>
+<div class="hint">Toque duas vezes rápido para começar e duas vezes de novo para parar. Ctrl+C e outros atalhos não ativam.</div>
+<div class="row">
+  <div><label>Segurar para falar</label><input id="pushToTalk" class="combo" readonly></div>
+  <div><label>Hands-free por combinação</label><input id="handsFree" class="combo" readonly></div>
+</div>
+<div class="row">
+  <div><label>Colar a última fala</label><input id="pasteLast"></div>
+  <div><label>Abrir últimas falas</label><input id="openHistory"></div>
+</div>
+<div class="hint">Estes dois usam o formato do Electron, ex.: Shift+Alt+Z.</div>
+
+<h2>Dicionário e snippets</h2>
+<label>Palavras (uma por linha)</label>
+<textarea id="dictionary" placeholder="Kaike&#10;Supabase&#10;Next.js"></textarea>
+<label>Snippets (gatilho => texto, um por linha)</label>
+<textarea id="snippets" placeholder="meu email => kaike@exemplo.com"></textarea>
+
+<h2>Indicador</h2>
+<div class="row">
+  <div><label>Posição</label>
+    <select id="widgetPosition">
+      <option value="bottom-right">Canto inferior direito</option><option value="bottom-left">Canto inferior esquerdo</option>
+      <option value="bottom-center">Embaixo, no centro</option><option value="top-right">Canto superior direito</option>
+      <option value="top-left">Canto superior esquerdo</option>
+    </select></div>
+  <div><label>Limite por gravação (min)</label><input id="maxMinutes" type="number" min="1" max="60"></div>
+</div>
+<label class="check"><input type="checkbox" id="sounds"> Sons de início e fim</label>
+<label class="check"><input type="checkbox" id="restoreClipboard"> Restaurar a área de transferência depois de colar</label>
+
+<p><button id="save">Salvar</button><span id="saved">Salvo ✓</span></p>
+
+<h2>Histórico</h2>
+<div class="hint">As últimas 10 falas ficam salvas antes de colar. Abra pelo ícone da bandeja, com o botão direito no indicador ou pelo atalho acima.</div>
+
+<script>
+const PRESETS = {
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3-turbo' },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini-transcribe' },
+  local: { baseUrl: 'http://localhost:8000/v1', model: 'Systran/faster-whisper-small' }
+};
+const $ = (id) => document.getElementById(id);
+const get = (obj, p) => p.split('.').reduce((o, k) => o?.[k], obj);
+const set = (obj, p, v) => { const ks = p.split('.'); const last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), obj)[last] = v; };
+const FIELDS = ['stt.baseUrl', 'stt.model', 'stt.apiKey', 'language', 'cleanup.provider', 'cleanup.style',
+  'cleanup.anthropicModel', 'cleanup.anthropicKey', 'cleanup.openaiBaseUrl', 'cleanup.openaiModel', 'cleanup.openaiKey',
+  'pasteLast', 'openHistory', 'widgetPosition', 'maxMinutes'];
+const COMBOS = ['pushToTalk', 'handsFree', 'doubleTap'];
+let current;
+
+function toggleCleanup() {
+  document.querySelectorAll('[data-show]').forEach((el) => el.classList.toggle('on', el.dataset.show === $('cleanup.provider').value));
+}
+
+window.vozflow.getSettings().then(({ settings, history, platform }) => {
+  current = settings;
+  for (const f of FIELDS) $(f).value = get(settings, f) ?? '';
+  $('dictionary').value = settings.dictionary.join('\n');
+  $('snippets').value = settings.snippets.map((s) => `${s.trigger} => ${s.text}`).join('\n');
+  $('sounds').checked = settings.sounds;
+  $('restoreClipboard').checked = settings.restoreClipboard;
+  const preset = Object.entries(PRESETS).find(([, p]) => p.baseUrl === settings.stt.baseUrl);
+  $('sttPreset').value = preset ? preset[0] : 'custom';
+  META = platform === 'darwin' ? 'Cmd' : 'Win';
+  for (const c of COMBOS) setCombo(c, settings[c]);
+  const show = (keys) => keys.map(label).join('+');
+  $('howto').textContent = (settings.doubleTap.length ? `Toque duas vezes em ${show(settings.doubleTap)} para o hands-free. ` : '') +
+    `Segure ${show(settings.pushToTalk)} para falar. Esc cancela.`;
+  toggleCleanup();
+});
+
+// ---------- Gravador de atalhos ----------
+let META = 'Win';
+const label = (k) => (k === 'Meta' ? META : k === 'Alt' && META === 'Cmd' ? 'Option' : k === 'Space' ? 'Espaço' : k);
+// Mesmos nomes que o hook global (uiohook) usa.
+function keyName(e) {
+  if (e.key === 'Control') return 'Ctrl';
+  if (['Alt', 'Shift', 'Meta', 'Escape', 'CapsLock', 'Tab', 'Enter'].includes(e.key)) return e.key;
+  if (e.code === 'Space') return 'Space';
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+  if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
+  if (/^F\d{1,2}$/.test(e.code)) return e.code;
+  return null;
+}
+function setCombo(id, keys) {
+  $(id).dataset.keys = JSON.stringify(keys);
+  $(id).value = keys.length ? keys.map(label).join(' + ') : 'Desativado';
+}
+for (const id of COMBOS) {
+  const el = $(id);
+  let pressed = new Set(), captured = [];
+  el.addEventListener('focus', () => { el.classList.add('rec'); el.value = 'Aperte as teclas…'; pressed = new Set(); captured = []; });
+  el.addEventListener('blur', () => { el.classList.remove('rec'); setCombo(id, JSON.parse(el.dataset.keys)); });
+  el.addEventListener('keydown', (e) => {
+    e.preventDefault();
+    if (e.key === 'Backspace' || e.key === 'Delete') { setCombo(id, []); return el.blur(); }
+    const k = keyName(e);
+    if (!k || pressed.has(k)) return;
+    pressed.add(k);
+    if (!captured.includes(k)) captured.push(k);
+    el.value = captured.map(label).join(' + ');
+  });
+  el.addEventListener('keyup', (e) => {
+    pressed.delete(keyName(e));
+    if (pressed.size === 0 && captured.length) {
+      // Modificadores primeiro, como o usuário costuma ler: Ctrl + Win + Espaço.
+      const order = ['Ctrl', 'Alt', 'Shift', 'Meta'];
+      captured.sort((a, b) => (order.indexOf(a) + 1 || 9) - (order.indexOf(b) + 1 || 9));
+      setCombo(id, captured);
+      el.blur();
+    }
+  });
+}
+
+$('sttPreset').onchange = (e) => {
+  const p = PRESETS[e.target.value];
+  if (p) { $('stt.baseUrl').value = p.baseUrl; $('stt.model').value = p.model; }
+};
+$('cleanup.provider').onchange = toggleCleanup;
+
+$('save').onclick = async () => {
+  const next = structuredClone(current);
+  for (const f of FIELDS) set(next, f, f === 'maxMinutes' ? Number($(f).value) || 20 : $(f).value.trim());
+  for (const c of COMBOS) next[c] = JSON.parse($(c).dataset.keys || '[]');
+  next.dictionary = $('dictionary').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  next.snippets = $('snippets').value.split('\n').map((l) => l.split('=>')).filter((p) => p.length === 2)
+    .map(([trigger, text]) => ({ trigger: trigger.trim(), text: text.trim().replace(/\\n/g, '\n') }));
+  next.sounds = $('sounds').checked;
+  next.restoreClipboard = $('restoreClipboard').checked;
+  current = await window.vozflow.saveSettings(next);
+  $('saved').style.opacity = 1; setTimeout(() => ($('saved').style.opacity = 0), 1500);
+};
+</script>
+</body>
+</html>

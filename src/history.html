@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>VozFlow — Últimas falas</title>
+<style>
+  :root { color-scheme: light dark; --muted: #888; --line: rgba(127,127,127,.22); --accent: #3b6cff; --bad: #e5484d; }
+  body { font: 14px -apple-system, "Segoe UI", system-ui, sans-serif; margin: 0; }
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 14px 16px 8px; }
+  h1 { font-size: 15px; margin: 0; } header small { color: var(--muted); }
+  #list { padding: 0 8px 12px; }
+  .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+  .item p { margin: 0 0 8px; white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
+  .meta { display: flex; align-items: center; gap: 6px; }
+  .meta time { color: var(--muted); font-size: 12px; margin-right: auto; }
+  .failed { border-color: var(--bad); } .failed p { color: var(--bad); font-size: 13px; }
+  button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 20px; }
+  footer { text-align: right; padding: 0 16px 14px; }
+</style>
+</head>
+<body>
+<header><h1>Últimas falas</h1><small>guarda as 10 mais recentes</small></header>
+<div id="list"></div>
+<footer><button id="clear">Limpar histórico</button></footer>
+<script>
+const list = document.getElementById('list');
+
+function ago(iso) {
+  const s = Math.round((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return 'agora';
+  if (s < 3600) return `há ${Math.round(s / 60)} min`;
+  return new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function button(label, onClick, primary) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (primary) b.className = 'primary';
+  b.onclick = onClick;
+  return b;
+}
+
+function render(items) {
+  list.innerHTML = '';
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">Nada por aqui ainda. O que você ditar aparece aqui antes de ser colado.</div>';
+    return;
+  }
+  for (const item of items) {
+    const box = document.createElement('div');
+    box.className = 'item' + (item.status === 'failed' ? ' failed' : '');
+    const p = document.createElement('p');
+    p.textContent = item.status === 'failed' ? `Não consegui transcrever: ${item.error}` : item.text;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const time = document.createElement('time');
+    time.textContent = ago(item.at);
+    meta.append(time);
+    if (item.status === 'failed') {
+      meta.append(button('Tentar de novo', async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = 'Transcrevendo…';
+        render(await window.vozflow.history.retry(item.id));
+      }, true));
+    } else {
+      meta.append(
+        button('Copiar', (e) => { window.vozflow.copy(item.text); e.target.textContent = 'Copiado ✓'; }),
+        button('Colar', () => window.vozflow.history.paste(item.id), true)
+      );
+    }
+    box.append(p, meta);
+    list.append(box);
+  }
+}
+
+document.getElementById('clear').onclick = async () => render(await window.vozflow.history.clear());
+window.vozflow.onHistory(render);
+window.vozflow.history.list().then(render);
+setInterval(() => window.vozflow.history.list().then(render), 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none;
+    font: 12px -apple-system, "Segoe UI", system-ui, sans-serif; }
+  #pill { box-sizing: border-box; height: 100%; width: 100%; border-radius: 999px;
+    background: rgba(18, 18, 22, .92); border: 1px solid rgba(255,255,255,.14);
+    display: flex; align-items: center; justify-content: center; gap: 8px; color: #fff; cursor: pointer;
+    transition: background .2s; }
+  #pill.idle { opacity: .55; } #pill.idle:hover { opacity: 1; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #9a9aa5; }
+  #bars { display: none; align-items: center; gap: 3px; height: 22px; }
+  #bars i { width: 3px; height: 3px; border-radius: 2px; background: #fff; transition: height .06s; }
+  button { all: unset; width: 22px; height: 22px; border-radius: 50%; display: none;
+    align-items: center; justify-content: center; font-size: 11px; background: rgba(255,255,255,.12); }
+  button:hover { background: rgba(255,255,255,.25); }
+  #stop { color: #ff5f57; }
+  #label { display: none; opacity: .85; }
+  .recording #bars, .recording button, .handsfree #stop { display: flex; }
+  .recording .dot { display: none; }
+  .ptt #stop { display: none; }
+  .msg #label { display: block; } .msg .dot { display: none; }
+  .processing .dot { animation: pulse .8s infinite alternate; background: #7aa2ff; }
+  @keyframes pulse { to { transform: scale(1.8); opacity: .4; } }
+</style>
+</head>
+<body>
+<div id="pill" class="idle" title="Clique para ditar · botão direito: últimas falas">
+  <button id="cancel" title="Cancelar (Esc)">✕</button>
+  <span class="dot"></span>
+  <div id="bars"></div>
+  <span id="label"></span>
+  <button id="stop" title="Parar e colar">■</button>
+</div>
+<script>
+const pill = document.getElementById('pill');
+const bars = document.getElementById('bars');
+const label = document.getElementById('label');
+const BAR_COUNT = 14;
+for (let i = 0; i < BAR_COUNT; i++) bars.appendChild(document.createElement('i'));
+
+const MESSAGES = { done: '✓', empty: 'Nada ouvido', cancelled: 'Cancelado', error: 'Erro' };
+let sounds = true;
+window.vozflow.getSettings().then(({ settings }) => (sounds = settings.sounds));
+
+window.vozflow.onState(({ state, mode, message }) => {
+  const cls = [state];
+  if (state === 'recording') cls.push(mode === 'ptt' ? 'ptt' : 'handsfree');
+  if (MESSAGES[state]) { cls.push('msg'); label.textContent = MESSAGES[state]; }
+  pill.className = cls.join(' ');
+  pill.title = message || '';
+});
+
+// Botão direito no indicador abre as últimas falas.
+pill.addEventListener('contextmenu', (e) => { e.preventDefault(); window.vozflow.click('history'); });
+pill.addEventListener('click', (e) => {
+  if (e.target.id === 'cancel') return window.vozflow.click('cancel');
+  window.vozflow.click('toggle');
+});
+
+// ---------- Gravação ----------
+let stream, recorder, chunks, ctx, analyser, raf, peak, startedAt, discard;
+let opening = false, pendingCmd = null; // comando que chegou enquanto o microfone abria
+
+function ping(freq) {
+  if (!sounds) return;
+  const a = new AudioContext();
+  const o = a.createOscillator(); const g = a.createGain();
+  o.frequency.value = freq; g.gain.setValueAtTime(.08, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(.0001, a.currentTime + .15);
+  o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + .16);
+  o.onended = () => a.close();
+}
+
+function drawLevels() {
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for (const v of data) { const x = (v - 128) / 128; sum += x * x; }
+  const rms = Math.sqrt(sum / data.length);
+  peak = Math.max(peak, rms);
+  const el = bars.children;
+  for (let i = 0; i < el.length - 1; i++) el[i].style.height = el[i + 1].style.height;
+  el[el.length - 1].style.height = Math.min(22, 3 + rms * 140) + 'px';
+  raf = requestAnimationFrame(drawLevels);
+}
+
+async function startRecording() {
+  opening = true; pendingCmd = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+    });
+  } catch (err) {
+    opening = false;
+    return window.vozflow.micError(err.message || String(err));
+  }
+  opening = false;
+  if (pendingCmd) {
+    stream.getTracks().forEach((t) => t.stop());
+    if (pendingCmd === 'stop') sendEmpty();
+    return;
+  }
+  ping(880);
+  chunks = []; peak = 0; discard = false; startedAt = performance.now();
+  const mimeType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+    .find((t) => MediaRecorder.isTypeSupported(t));
+  recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 });
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.onstop = async () => {
+    cancelAnimationFrame(raf);
+    stream.getTracks().forEach((t) => t.stop());
+    ctx.close();
+    if (discard) return;
+    const blob = new Blob(chunks, { type: recorder.mimeType });
+    window.vozflow.sendAudio({
+      buffer: await blob.arrayBuffer(),
+      mimeType: recorder.mimeType,
+      peak,
+      durationMs: performance.now() - startedAt
+    });
+  };
+  recorder.start(250);
+  ctx = new AudioContext();
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  drawLevels();
+}
+
+function sendEmpty() {
+  // Avisa o processo principal para liberar o estado "processando".
+  window.vozflow.sendAudio({ buffer: new ArrayBuffer(0), mimeType: 'audio/webm', peak: 0, durationMs: 0 });
+}
+
+window.vozflow.onRecord(async (cmd) => {
+  if (cmd === 'start') return startRecording();
+  if (opening) { pendingCmd = cmd; return; }
+  if (!recorder || recorder.state === 'inactive') {
+    if (cmd === 'stop') sendEmpty();
+    return;
+  }
+  discard = cmd === 'cancel';
+  if (!discard) ping(660);
+  recorder.stop();
+});
+</script>
+</body>
+</html>
