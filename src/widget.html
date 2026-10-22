@@ -88,8 +88,33 @@ function drawLevels() {
   raf = requestAnimationFrame(drawLevels);
 }
 
+let needWav = true;
+
+async function toWav16k(arrayBuffer) {
+  const rate = 16000;
+  const decodeCtx = new AudioContext({ sampleRate: rate });
+  const audio = await decodeCtx.decodeAudioData(arrayBuffer);
+  decodeCtx.close();
+  const pcm = audio.getChannelData(0);
+  const out = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const str = (o, t) => [...t].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); out.setUint32(4, 36 + pcm.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) {
+    const v = Math.max(-1, Math.min(1, pcm[i]));
+    out.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return out.buffer;
+}
+
 async function startRecording() {
   opening = true; pendingCmd = null;
+  window.vozflow.getSettings().then(({ settings }) => {
+    needWav = settings.stt.provider === 'local';
+    sounds = settings.sounds;
+  });
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
@@ -115,13 +140,20 @@ async function startRecording() {
     stream.getTracks().forEach((t) => t.stop());
     ctx.close();
     if (discard) return;
+    const durationMs = performance.now() - startedAt;
     const blob = new Blob(chunks, { type: recorder.mimeType });
-    window.vozflow.sendAudio({
-      buffer: await blob.arrayBuffer(),
-      mimeType: recorder.mimeType,
-      peak,
-      durationMs: performance.now() - startedAt
-    });
+    let buffer = await blob.arrayBuffer();
+    let mimeType = recorder.mimeType;
+    if (needWav && peak >= 0.02) {
+      // O Whisper embutido lê WAV 16 kHz mono; convertemos aqui mesmo, sem ffmpeg.
+      try {
+        buffer = await toWav16k(buffer);
+        mimeType = 'audio/wav';
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    window.vozflow.sendAudio({ buffer, mimeType, peak, durationMs });
   };
   recorder.start(250);
   ctx = new AudioContext();

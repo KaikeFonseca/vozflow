@@ -106,7 +106,9 @@ function applySnippets(text, snippets) {
 }
 
 async function processAudio(audio, mimeType, settings) {
-  const raw = await speechToText(audio, mimeType, settings);
+  const raw = settings.stt.provider === 'local'
+    ? await require('./localWhisper').transcribeLocal(audio, { ...settings, whisperPrompt: whisperPrompt(settings) })
+    : await speechToText(audio, mimeType, settings);
   if (!raw) return { raw, text: '' };
   let text = raw;
   try {

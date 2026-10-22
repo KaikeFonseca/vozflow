@@ -35,9 +35,11 @@ jobs:
           - os: windows-latest
             script: dist:win
             name: windows
+            whisper: win x64
           - os: macos-latest
             script: dist:mac
             name: mac
+            whisper: mac arm64,mac x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +48,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Whisper embutido: compila o whisper-server e baixa o modelo (guardados em cache entre builds).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            bin
+            models/*.bin
+          key: whisper-v1.9.5-${{ matrix.name }}-${{ hashFiles('scripts/build-whisper.sh') }}
+      - name: Build whisper-server
+        shell: bash
+        run: |
+          IFS=',' read -ra TARGETS <<< "${{ matrix.whisper }}"
+          for t in "${TARGETS[@]}"; do
+            set -- $t
+            if [ -f "bin/$1-$2/whisper-server" ] || [ -f "bin/$1-$2/whisper-server.exe" ]; then
+              echo "cache: bin/$1-$2"
+            else
+              bash scripts/build-whisper.sh "$1" "$2"
+            fi
+          done
+          ls -la bin/* models
       - run: npm run ${{ matrix.script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

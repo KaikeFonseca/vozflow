@@ -38,6 +38,16 @@ Outros comportamentos:
 - **Dicionário**: nomes e termos que o Whisper deve escrever certo.
 - **Snippets**: diga "meu email" e ele digita o endereço completo.
 - **Limpeza com IA (opcional)**: tira "é", "tipo", "né", aplica autocorreções ("às 5, quer dizer, às 6" vira "às 6"), pontua e formata listas. Funciona com Claude ou qualquer API compatível com OpenAI.
+## Transcrição: grátis no seu computador ou na nuvem
+
+- **Whisper embutido (padrão)**: o app já vem com o [whisper.cpp](https://github.com/ggml-org/whisper.cpp) e o modelo
+  `small` multilíngue. Funciona sem internet, sem chave e sem custo. O modelo fica carregado na memória
+  enquanto o app está aberto, então cada ditado sai em poucos segundos. No Mac com chip Apple ele usa a GPU (Metal).
+- **Modelo maior (opcional)**: em Configurações dá para baixar o `large-v3-turbo` (~550 MB), que acerta mais
+  mas é mais lento em PC sem placa de vídeo.
+- **Nuvem (opcional)**: troque para "Na nuvem" e cole uma chave da [Groq](https://console.groq.com/keys)
+  (tem plano grátis) ou da OpenAI. É mais rápido, mas o áudio sai do seu computador.
+
 ## Baixar o instalador pronto
 
 Cada atualização no GitHub gera os instaladores automaticamente (GitHub Actions):
@@ -68,12 +78,8 @@ npm install
 npm start
 ```
 
-Na primeira vez, a janela de Configurações abre. Escolha o provedor de transcrição e cole a chave:
-
-- **Groq** (padrão, recomendado): muito rápido e barato. Crie a chave em https://console.groq.com/keys
-- **OpenAI**: https://platform.openai.com/api-keys
-- **Local/offline**: rode um servidor Whisper compatível com OpenAI na sua máquina
-  (ex.: `docker run -p 8000:8000 ghcr.io/speaches-ai/speaches:latest-cpu`) e escolha "Servidor Whisper local". Não precisa de chave.
+Para rodar do código com o Whisper embutido, compile o motor uma vez (precisa de CMake e de um compilador C++):
+`bash scripts/build-whisper.sh win x64` (ou `mac arm64`, `mac x64`, `linux x64`).
 
 Para gerar o instalador na sua máquina: `npm run dist:win` (no Windows) ou `npm run dist:mac` (no Mac). Testes: `npm test`.
 

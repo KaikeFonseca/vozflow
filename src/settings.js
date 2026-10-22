@@ -18,7 +18,10 @@ const DEFAULTS = {
   // pt-en = detecta sozinho entre português e inglês (e frases misturadas).
   language: 'pt-en',
   stt: {
-    // Qualquer API compatível com /audio/transcriptions da OpenAI:
+    // local = Whisper embutido (offline, grátis). cloud = API na nuvem (Groq, OpenAI...).
+    provider: 'local',
+    localModel: 'small',
+    // Para o modo cloud, qualquer API compatível com /audio/transcriptions da OpenAI:
     // Groq, OpenAI ou um servidor Whisper local (ex.: speaches / faster-whisper-server).
     baseUrl: 'https://api.groq.com/openai/v1',
     model: 'whisper-large-v3-turbo',

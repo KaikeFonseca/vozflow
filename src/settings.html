@@ -17,7 +17,7 @@
   button { padding: 8px 18px; border-radius: 6px; border: 0; background: #3b6cff; color: #fff; font: inherit; cursor: pointer; }
   #saved { margin-left: 10px; color: #2a9d55; opacity: 0; transition: opacity .3s; }
   input.combo { cursor: pointer; font-weight: 600; } input.combo.rec { border-color: #3b6cff; color: #3b6cff; }
-  [data-show] { display: none; } [data-show].on { display: block; }
+  [data-show], [data-stt] { display: none; } [data-show].on, [data-stt].on { display: block; }
 </style>
 </head>
 <body>
@@ -25,18 +25,31 @@
 <div class="hint" id="howto"></div>
 
 <h2>Transcrição</h2>
-<label>Provedor</label>
-<select id="sttPreset">
-  <option value="groq">Groq (whisper-large-v3-turbo, rápido e barato)</option>
-  <option value="openai">OpenAI (gpt-4o-mini-transcribe)</option>
-  <option value="local">Servidor Whisper local (offline)</option>
-  <option value="custom">Personalizado</option>
+<label>Onde transcrever</label>
+<select id="stt.provider">
+  <option value="local">No meu computador: Whisper embutido (grátis, offline, sem chave)</option>
+  <option value="cloud">Na nuvem: Groq / OpenAI (mais rápido, precisa de chave)</option>
 </select>
-<div class="row">
-  <div><label>URL base</label><input id="stt.baseUrl"></div>
-  <div><label>Modelo</label><input id="stt.model"></div>
+<div data-stt="local">
+  <label>Modelo</label>
+  <select id="stt.localModel"></select>
+  <div class="hint" id="modelHint"></div>
+  <p><button id="downloadModel" type="button" style="display:none">Baixar modelo</button> <span id="dlStatus" class="hint"></span></p>
 </div>
-<label>Chave da API</label><input id="stt.apiKey" type="password" placeholder="gsk_… ou sk-…">
+<div data-stt="cloud">
+  <label>Serviço</label>
+  <select id="sttPreset">
+    <option value="groq">Groq (whisper-large-v3-turbo, rápido, tem plano grátis)</option>
+    <option value="openai">OpenAI (gpt-4o-mini-transcribe, pago)</option>
+    <option value="custom">Personalizado</option>
+  </select>
+  <div class="row">
+    <div><label>URL base</label><input id="stt.baseUrl"></div>
+    <div><label>Modelo</label><input id="stt.model"></div>
+  </div>
+  <label>Chave da API</label><input id="stt.apiKey" type="password" placeholder="gsk_… ou sk-…">
+  <div class="hint">Chave grátis da Groq: console.groq.com/keys</div>
+</div>
 <label>Idioma</label>
 <select id="language">
   <option value="pt-en">Português + English (detecta sozinho, aceita frases misturadas)</option>
@@ -112,16 +125,55 @@
 const PRESETS = {
   groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3-turbo' },
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini-transcribe' },
-  local: { baseUrl: 'http://localhost:8000/v1', model: 'Systran/faster-whisper-small' }
 };
 const $ = (id) => document.getElementById(id);
 const get = (obj, p) => p.split('.').reduce((o, k) => o?.[k], obj);
 const set = (obj, p, v) => { const ks = p.split('.'); const last = ks.pop(); ks.reduce((o, k) => (o[k] ??= {}), obj)[last] = v; };
-const FIELDS = ['stt.baseUrl', 'stt.model', 'stt.apiKey', 'language', 'cleanup.provider', 'cleanup.style',
+const FIELDS = ['stt.provider', 'stt.localModel', 'stt.baseUrl', 'stt.model', 'stt.apiKey', 'language', 'cleanup.provider', 'cleanup.style',
   'cleanup.anthropicModel', 'cleanup.anthropicKey', 'cleanup.openaiBaseUrl', 'cleanup.openaiModel', 'cleanup.openaiKey',
   'pasteLast', 'openHistory', 'widgetPosition', 'maxMinutes'];
 const COMBOS = ['pushToTalk', 'handsFree', 'doubleTap'];
 let current;
+
+function toggleStt() {
+  document.querySelectorAll('[data-stt]').forEach((el) => el.classList.toggle('on', el.dataset.stt === $('stt.provider').value));
+}
+
+let models = {};
+async function loadModels() {
+  const status = await window.vozflow.whisper.status();
+  models = status.models;
+  const sel = $('stt.localModel');
+  const keep = sel.value || current?.stt.localModel;
+  sel.innerHTML = '';
+  for (const [key, m] of Object.entries(models)) {
+    const o = document.createElement('option');
+    o.value = key;
+    o.textContent = m.label + (m.installed ? '' : ' (não baixado)');
+    sel.append(o);
+  }
+  if (keep) sel.value = keep;
+  updateModelHint();
+}
+function updateModelHint() {
+  const m = models[$('stt.localModel').value];
+  $('downloadModel').style.display = m && !m.installed ? 'inline-block' : 'none';
+  $('modelHint').textContent = m && !m.installed ? 'Baixe o modelo antes de salvar com ele.' : 'Pronto para usar, sem internet.';
+}
+$('stt.localModel').onchange = updateModelHint;
+$('downloadModel').onclick = async () => {
+  const key = $('stt.localModel').value;
+  $('downloadModel').disabled = true;
+  try {
+    await window.vozflow.whisper.download(key);
+    $('dlStatus').textContent = 'Baixado ✓';
+  } catch (err) {
+    $('dlStatus').textContent = 'Falhou: ' + err.message;
+  }
+  $('downloadModel').disabled = false;
+  loadModels();
+};
+window.vozflow.whisper.onProgress(({ p }) => ($('dlStatus').textContent = `Baixando… ${Math.round(p * 100)}%`));
 
 function toggleCleanup() {
   document.querySelectorAll('[data-show]').forEach((el) => el.classList.toggle('on', el.dataset.show === $('cleanup.provider').value));
@@ -142,7 +194,10 @@ window.vozflow.getSettings().then(({ settings, history, platform }) => {
   $('howto').textContent = (settings.doubleTap.length ? `Toque duas vezes em ${show(settings.doubleTap)} para o hands-free. ` : '') +
     `Segure ${show(settings.pushToTalk)} para falar. Esc cancela.`;
   toggleCleanup();
+  toggleStt();
+  loadModels();
 });
+$('stt.provider').onchange = toggleStt;
 
 // ---------- Gravador de atalhos ----------
 let META = 'Win';
@@ -194,6 +249,10 @@ $('sttPreset').onchange = (e) => {
 $('cleanup.provider').onchange = toggleCleanup;
 
 $('save').onclick = async () => {
+  if ($('stt.provider').value === 'local' && models[$('stt.localModel').value] && !models[$('stt.localModel').value].installed) {
+    $('dlStatus').textContent = 'Baixe o modelo escolhido antes de salvar.';
+    return;
+  }
   const next = structuredClone(current);
   for (const f of FIELDS) set(next, f, f === 'maxMinutes' ? Number($(f).value) || 20 : $(f).value.trim());
   for (const c of COMBOS) next[c] = JSON.parse($(c).dataset.keys || '[]');

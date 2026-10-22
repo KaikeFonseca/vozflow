@@ -1,6 +1,6 @@
 {
   "name": "vozflow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ditado por voz que digita em qualquer app, com atalho global, modo hands-free e indicador flutuante.",
   "main": "src/main.js",
   "author": "Kaike",
@@ -27,6 +27,19 @@
       "src/**/*",
       "assets/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/${os}-${arch}",
+        "to": "whisper"
+      },
+      {
+        "from": "models",
+        "to": "models",
+        "filter": [
+          "*.bin"
+        ]
+      }
     ],
     "npmRebuild": false,
     "publish": null,

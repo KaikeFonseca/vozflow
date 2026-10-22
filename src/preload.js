@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld('vozflow', {
   copy: (text) => ipcRenderer.send('copy', text),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (s) => ipcRenderer.invoke('settings:save', s),
+  whisper: {
+    status: () => ipcRenderer.invoke('whisper:status'),
+    download: (key) => ipcRenderer.invoke('whisper:download', key),
+    onProgress: (fn) => ipcRenderer.on('whisper:progress', (_e, d) => fn(d))
+  },
   history: {
     list: () => ipcRenderer.invoke('history:list'),
     paste: (id) => ipcRenderer.invoke('history:paste', id),

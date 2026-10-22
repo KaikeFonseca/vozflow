@@ -9,6 +9,7 @@ const { HotkeyMachine } = require('./hotkeys');
 const { processAudio } = require('./transcribe');
 const { insertText } = require('./inserter');
 const { History } = require('./history');
+const localWhisper = require('./localWhisper');
 
 let widget = null;
 let settingsWin = null;
@@ -100,6 +101,7 @@ async function waitForModifiersReleased(timeout = 1500) {
 }
 
 function checkApiKey(s) {
+  if (s.stt.provider === 'local') return;
   if (!s.stt.apiKey && !/localhost|127\.0\.0\.1/.test(s.stt.baseUrl)) {
     throw new Error('Configure a chave da API de transcrição nas Configurações.');
   }
@@ -284,6 +286,8 @@ function openSettings() {
 ipcMain.handle('settings:get', () => ({ settings: settings(), history: history.list(), platform: process.platform }));
 ipcMain.handle('settings:save', (_e, next) => {
   const saved = settingsStore.save(next);
+  if (saved.stt.provider === 'local') warmUpLocal(saved);
+  else localWhisper.stop();
   machine.ptt = saved.pushToTalk;
   machine.hf = saved.handsFree;
   machine.dt = saved.doubleTap;
@@ -292,6 +296,22 @@ ipcMain.handle('settings:save', (_e, next) => {
   return saved;
 });
 ipcMain.on('copy', (_e, text) => clipboard.writeText(text));
+
+// ---------- Whisper embutido ----------
+
+function warmUpLocal(s = settings()) {
+  // Sobe o servidor já na abertura para o primeiro ditado não esperar o modelo carregar.
+  localWhisper.start(s.stt.localModel).catch((err) => {
+    console.error(err);
+    new Notification({ title: 'VozFlow', body: String(err.message || err) }).show();
+  });
+}
+
+ipcMain.handle('whisper:status', () => ({ models: localWhisper.modelsStatus(), log: localWhisper.logLines.slice(-40) }));
+ipcMain.handle('whisper:download', async (e, key) => {
+  await localWhisper.downloadModel(key, (p) => e.sender.send('whisper:progress', { key, p }));
+  return localWhisper.modelsStatus();
+});
 
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'tray.png'));
@@ -329,12 +349,15 @@ app.whenReady().then(async () => {
   createWidget();
   createTray();
   setupHotkeys();
-  if (!settings().stt.apiKey) openSettings();
+  const s = settings();
+  if (s.stt.provider === 'local') warmUpLocal(s);
+  else if (!s.stt.apiKey) openSettings();
 });
 
 // App de bandeja: fechar a janela de configurações não encerra o app.
 app.on('window-all-closed', () => {});
 app.on('will-quit', () => {
+  localWhisper.stop();
   globalShortcut.unregisterAll();
   uIOhook.stop();
 });
